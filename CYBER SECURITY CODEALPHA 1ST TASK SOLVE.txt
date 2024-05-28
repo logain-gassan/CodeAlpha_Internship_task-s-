@@ -1,0 +1,93 @@
+`python
+import socket
+import struct
+
+# Define the Ethernet header format
+ETH_HDR_FMT = '!6s6sH'
+
+def ethernet_unpack(raw_data):
+    """Unpacks an Ethernet header."""
+    dest_mac, src_mac, proto = struct.unpack(ETH_HDR_FMT, raw_data[:14])
+    return get_mac_addr(dest_mac), get_mac_addr(src_mac), socket.htons(proto), raw_data[14:]
+
+def get_mac_addr(bytes_addr):
+    """Converts raw MAC address bytes to a readable string."""
+    bytes_str = map('{:02x}'.format, bytes_addr)
+    mac_addr = ':'.join(bytes_str).upper()
+    return mac_addr
+
+# Define the IPv4 header format
+IPV4_HDR_FMT = '!BBHHHBBH4s4s'
+
+def ipv4_unpack(raw_data):
+    """Unpacks an IPv4 header."""
+    version_header_len, tos, total_len, identification, flags_frag_offset, ttl, proto, checksum, src_ip, dest_ip = struct.unpack(IPV4_HDR_FMT, raw_data[:20])
+    return version_header_len, tos, total_len, identification, flags_frag_offset, ttl, proto, checksum, ipv4_addr(src_ip), ipv4_addr(dest_ip), raw_data[20:]
+
+def ipv4_addr(bytes_addr):
+    """Converts raw IPv4 address bytes to a readable string."""
+    return '.'.join(map(str, bytes_addr))
+
+def main():
+    # Create a raw socket
+    s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))
+
+    while True:
+        # Receive a packet
+        raw_data, addr = s.recvfrom(65536)
+
+        # Unpack Ethernet header
+        dest_mac, src_mac, eth_proto, data = ethernet_unpack(raw_data)
+
+        print('\nEthernet Frame:')
+        print(f'Destination MAC: {dest_mac}, Source MAC: {src_mac}, Protocol: {eth_proto}')
+
+        # Handle IPv4 packets
+        if eth_proto == 8:
+            version_header_len, tos, total_len, identification, flags_frag_offset, ttl, proto, checksum, src_ip, dest_ip, data = ipv4_unpack(data)
+
+            print('\nIPv4 Packet:')
+            print(f'Version: {version_header_len >> 4}, Header Length: {(version_header_len & 15) * 4} bytes')
+            print(f'TOS: {tos}, Total Length: {total_len}, ID: {identification}, Flags/Fragment Offset: {flags_frag_offset}, TTL: {ttl}')
+            print(f'Protocol: {proto}, Checksum: {checksum}, Source IP: {src_ip}, Destination IP: {dest_ip}')
+
+if __name__ == '__main__':
+    main()
+```
+
+**Explanation:**
+
+1. **Import Libraries:**
+   - `socket` for creating raw sockets and receiving network packets.
+   - `struct` for unpacking binary data from network headers.
+
+2. **Define Header Formats:**
+   - `ETH_HDR_FMT` specifies the format of the Ethernet header (destination MAC, source MAC, protocol type).
+   - `IPV4_HDR_FMT` specifies the format of the IPv4 header (version, header length, type of service, etc.).
+
+3. **Unpacking Functions:**
+   - `ethernet_unpack(raw_data)` unpacks the Ethernet header from the raw packet data.
+   - `ipv4_unpack(raw_data)` unpacks the IPv4 header (if present).
+
+4. **Address Conversion Functions:**
+   - `get_mac_addr(bytes_addr)` converts raw MAC address bytes to a human-readable string.
+   - `ipv4_addr(bytes_addr)` converts raw IPv4 address bytes to a human-readable string.
+
+5. **Main Function (`main`)**:
+   - Create a raw socket using `socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))`. This sets up a raw socket that captures all Ethernet frames.
+   - Enter an infinite loop (`while True`) to continuously capture packets.
+   - Receive a packet using `s.recvfrom(65536)`. This returns the raw packet data and the address information.
+   - Unpack the Ethernet header using `ethernet_unpack(raw_data)`.
+   - Print the basic Ethernet frame information (destination MAC, source MAC, protocol).
+   - If the Ethernet protocol is IPv4 (8), unpack the IPv4 header and print its information.
+
+**Running the Sniffer:**
+
+1. **Run as Root:** You'll likely need root or administrator privileges to create raw sockets and capture packets.
+2. **Interface:** The sniffer captures packets on all interfaces. 
+
+**Important Notes:**
+
+- This sniffer provides a basic framework. You can extend it to handle other protocols (e.g., TCP, UDP), filter packets based on specific criteria, and perform more detailed analysis of packet contents.
+- Be mindful of legal and ethical considerations when using packet sniffers.
+- This code focuses on IPv4. Handling IPv6 would require additional code to unpack the IPv6 header. 
